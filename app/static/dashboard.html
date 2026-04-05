@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowAgent | Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260406" />
+  </head>
+  <body data-page="dashboard">
+    <main class="dashboard-shell" role="application" aria-label="FlowAgent dashboard">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <span class="brand-dot"></span>
+          <span class="brand-name">FlowAgent</span>
+        </div>
+        <div id="apiStatus" class="api-status">API offline</div>
+      </header>
+
+      <section class="dashboard-grid">
+        <aside class="sidebar" id="sidebarPanel">
+          <section class="user-card">
+            <div class="avatar" id="userAvatar">FA</div>
+            <div class="user-meta">
+              <p class="user-name" id="userName">Guest</p>
+              <p class="user-email" id="userEmail">-</p>
+              <p class="calendar-status disconnected" id="calendarStatusPill">Calendar not connected</p>
+            </div>
+            <button id="logoutBtn" class="btn btn-secondary">Log Out</button>
+          </section>
+
+          <section class="sidebar-block" id="calendarConnectWrap">
+            <button id="connectCalendarBtn" class="btn btn-primary full-width">Connect Calendar</button>
+          </section>
+
+          <section class="sidebar-block" id="tasksSection">
+            <div class="section-header">Tasks</div>
+            <form id="taskForm" class="task-form">
+              <input id="taskTitle" class="text-input" placeholder="Task title" required />
+              <div class="task-controls">
+                <select id="taskPriority" class="text-input">
+                  <option value="urgent">urgent</option>
+                  <option value="high">high</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="low">low</option>
+                </select>
+                <select id="taskTag" class="text-input">
+                  <option value="work" selected>work</option>
+                  <option value="personal">personal</option>
+                  <option value="health">health</option>
+                  <option value="learning">learning</option>
+                </select>
+              </div>
+              <div class="task-controls">
+                <button type="submit" class="btn btn-primary">Add Task</button>
+                <button id="refreshTasksBtn" type="button" class="btn btn-secondary">Refresh</button>
+              </div>
+            </form>
+            <ul id="taskList" class="task-list"></ul>
+          </section>
+
+          <section class="sidebar-block" id="availabilitySection">
+            <div class="section-header">Today's Availability</div>
+            <div id="freeSlots" class="availability-list"></div>
+          </section>
+
+          <details id="miniCalendar" class="sidebar-block mini-calendar">
+            <summary class="section-header">Mini Calendar</summary>
+            <div class="calendar-wrap">
+              <p id="calendarMonthLabel" class="calendar-month">Calendar</p>
+              <div class="cal-header">
+                <div class="cal-day-name">S</div>
+                <div class="cal-day-name">M</div>
+                <div class="cal-day-name">T</div>
+                <div class="cal-day-name">W</div>
+                <div class="cal-day-name">T</div>
+                <div class="cal-day-name">F</div>
+                <div class="cal-day-name">S</div>
+              </div>
+              <div id="calDays" class="cal-days"></div>
+            </div>
+          </details>
+        </aside>
+
+        <section class="main-area">
+          <div class="schedule-header">
+            <div>
+              <h1 id="scheduleTitle" class="schedule-title">Today</h1>
+            </div>
+            <div class="schedule-actions">
+              <button id="addEventBtn" class="btn btn-secondary">+ Add to schedule</button>
+              <div class="view-tabs" id="viewTabs">
+                <button class="view-tab active" data-view="day" type="button">Day</button>
+                <button class="view-tab" data-view="week" type="button">Week</button>
+                <button class="view-tab" data-view="optimal" type="button">Optimal</button>
+              </div>
+            </div>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </section>
+
+        <aside class="right-panel" id="rightPanel">
+          <div class="section-header">AI Chat</div>
+          <div class="agent-badges" id="agentBadges">
+            <span class="agent-badge active" data-agent="calendar">Calendar Agent</span>
+            <span class="agent-badge active" data-agent="task">Task Agent</span>
+            <span class="agent-badge inactive" data-agent="optimizer">Optimizer Agent</span>
+            <span class="agent-badge inactive" data-agent="scheduling">Scheduling Agent</span>
+          </div>
+
+          <div id="chatLog" class="chat-log"></div>
+
+          <div id="quickChips" class="quick-chips">
+            <button class="chip" type="button" data-chip="When am I free today?">When am I free?</button>
+            <button class="chip" type="button" data-chip="Optimize my day">Optimize my day</button>
+            <button class="chip" type="button" data-chip="Schedule gym for this week">Schedule gym</button>
+            <button class="chip" type="button" data-chip="Add a 2pm meeting">Add a 2pm meeting</button>
+          </div>
+
+          <form id="chatForm" class="chat-form">
+            <input id="messageInput" class="chat-input" placeholder="Ask about your schedule, tasks, or events..." required />
+            <button class="btn btn-primary" type="submit">Send</button>
+          </form>
+
+          <div id="confirmBar" class="confirm-bar hidden">
+            <span>Pending action is ready.</span>
+            <button id="confirmActionBtn" class="btn btn-secondary" type="button">Confirm Action</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/app.js?v=20260406" defer></script>
+  </body>
+</html>

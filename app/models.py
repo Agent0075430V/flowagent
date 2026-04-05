@@ -9,8 +9,26 @@ TaskStatus = Literal["pending", "completed"]
 
 
 class FlowMessageRequest(BaseModel):
-    user_id: str
     message: str
+
+
+class SignUpRequest(BaseModel):
+    email: str
+    password: str
+    first_name: str = ""
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user_id: str
+    email: str
 
 
 class ProposedAction(BaseModel):
@@ -27,7 +45,6 @@ class FlowMessageResponse(BaseModel):
 
 
 class ConfirmActionRequest(BaseModel):
-    user_id: str
     action: ProposedAction
 
 

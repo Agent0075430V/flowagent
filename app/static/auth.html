@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowAgent | Auth</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260406" />
+  </head>
+  <body data-page="auth">
+    <main class="auth-shell" aria-label="Authentication">
+      <a class="back-home" href="/">Back to home</a>
+      <section class="auth-card">
+        <h1 class="auth-title">Welcome to FlowAgent</h1>
+        <p class="auth-subtitle">Sign in to plan your day with AI assistance.</p>
+
+        <div class="auth-toggle" id="authModeToggle">
+          <button type="button" class="auth-tab active" data-auth-mode="login">Log In</button>
+          <button type="button" class="auth-tab" data-auth-mode="signup">Sign Up</button>
+        </div>
+
+        <form id="authForm" class="auth-form">
+          <label class="field-label" for="authEmail">Email</label>
+          <input id="authEmail" class="text-input" type="email" required placeholder="you@example.com" />
+
+          <label class="field-label" for="authPassword">Password</label>
+          <input id="authPassword" class="text-input" type="password" required placeholder="At least 8 characters" />
+
+          <div id="confirmPasswordWrap" class="confirm-wrap hidden">
+            <label class="field-label" for="authConfirmPassword">Confirm Password</label>
+            <input id="authConfirmPassword" class="text-input" type="password" placeholder="Re-enter password" />
+          </div>
+
+          <button id="authSubmitBtn" class="btn btn-primary" type="submit">Log In</button>
+        </form>
+
+        <p id="authMessage" class="auth-message"></p>
+      </section>
+    </main>
+    <script src="/static/app.js?v=20260406" defer></script>
+  </body>
+</html>

@@ -7,93 +7,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260406" />
   </head>
-  <body>
-    <div class="bg-orb orb-a"></div>
-    <div class="bg-orb orb-b"></div>
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Intelligent Scheduling Assistant</p>
-          <h1>FlowAgent</h1>
+  <body data-page="landing">
+    <main class="landing-shell" aria-label="FlowAgent welcome page">
+      <section class="landing-hero">
+        <p class="landing-eyebrow">Welcome</p>
+        <h1 class="landing-title">FlowAgent</h1>
+        <p class="landing-tagline">Your AI-powered scheduling assistant</p>
+        <div class="landing-actions">
+          <a class="btn btn-primary" href="/static/auth.html?mode=signup" id="goSignupBtn">Sign Up</a>
+          <a class="btn btn-secondary" href="/static/auth.html?mode=login" id="goLoginBtn">Log In</a>
         </div>
-        <div class="status" id="apiStatus">Checking API...</div>
-      </header>
-
-      <section class="panel identity-panel">
-        <label for="userId">User ID</label>
-        <div class="row">
-          <input id="userId" placeholder="e.g. tanis" />
-          <button id="saveUserBtn">Save</button>
-          <button id="connectCalendarBtn" class="ghost">Connect Calendar</button>
-        </div>
-        <label for="apiKey">API Key</label>
-        <div class="row">
-          <input id="apiKey" type="password" placeholder="Paste APP_API_KEY" />
-          <button id="saveApiKeyBtn" class="ghost">Save API Key</button>
-        </div>
-        <p class="hint">Timezone defaults to IST and work hours default to 9:00 AM-7:00 PM.</p>
       </section>
 
-      <section class="grid">
-        <article class="panel chat-panel">
-          <h2>Ask FlowAgent</h2>
-          <div id="chatLog" class="chat-log"></div>
-          <form id="chatForm" class="chat-form">
-            <input id="messageInput" placeholder="Try: When am I free today?" required />
-            <button type="submit">Send</button>
-          </form>
-          <div id="confirmBar" class="confirm-bar hidden">
-            <span>Pending action ready.</span>
-            <button id="confirmActionBtn">Confirm Action</button>
-          </div>
-        </article>
-
-        <article class="panel tasks-panel">
-          <h2>Tasks</h2>
-          <form id="taskForm" class="task-form">
-            <input id="taskTitle" placeholder="Task title" required />
-            <select id="taskPriority">
-              <option value="urgent">urgent</option>
-              <option value="high">high</option>
-              <option value="medium" selected>medium</option>
-              <option value="low">low</option>
-            </select>
-            <select id="taskTag">
-              <option value="work" selected>work</option>
-              <option value="personal">personal</option>
-              <option value="health">health</option>
-              <option value="learning">learning</option>
-            </select>
-            <button type="submit">Add Task</button>
-          </form>
-
-          <div class="task-actions">
-            <button id="refreshTasksBtn" class="ghost">Refresh</button>
-          </div>
-
-          <ul id="taskList" class="task-list"></ul>
-        </article>
+      <section class="landing-features" aria-label="FlowAgent features">
+        <article class="feature-pill">Calendar Sync</article>
+        <article class="feature-pill">Smart Scheduling</article>
+        <article class="feature-pill">AI Chat</article>
       </section>
     </main>
-
-    <template id="taskItemTemplate">
-      <li class="task-item">
-        <div>
-          <p class="task-title"></p>
-          <p class="task-meta"></p>
-        </div>
-        <div class="task-buttons">
-          <button data-action="complete">Complete</button>
-          <button data-action="delete" class="danger">Delete</button>
-        </div>
-      </li>
-    </template>
-
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=20260406" defer></script>
   </body>
 </html>

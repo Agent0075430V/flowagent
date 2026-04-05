@@ -10,14 +10,17 @@ class Settings(BaseSettings):
 
     gcp_project_id: str = "woven-answer-492218-v6"
     firestore_database: str = "(default)"
+    enable_local_fallback_store: bool = True
+    local_fallback_store_file: str = ".flowagent_local_store.json"
 
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8080/auth/callback"
 
-    # API key used by backend endpoint guard (X-API-Key header).
-    app_api_key: str = ""
-    enable_api_key_auth: bool = True
+    # JWT settings for user authentication.
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expires_minutes: int = 1440
 
     # Gemini/Vertex AI fallback settings for intent classification.
     use_gemini_intent_fallback: bool = True
@@ -30,7 +33,8 @@ class Settings(BaseSettings):
     default_work_end: str = "19:00"
 
     # Use a strong random value in production for signing ephemeral state payloads.
-    state_secret: str = "change-me"
+    state_secret: str = ""
+    oauth_state_ttl_seconds: int = 600
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

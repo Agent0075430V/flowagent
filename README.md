@@ -37,6 +37,9 @@ gcloud firestore databases create --location=asia-south1 --type=firestore-native
    - `http://localhost:8080/auth/callback` (local)
    - `https://<cloud-run-url>/auth/callback` (prod)
 4. Put values in `.env` from `.env.example`.
+5. Set strong secrets in `.env`:
+  - `JWT_SECRET`
+  - `STATE_SECRET`
 
 ## 4) Local Run
 
@@ -52,22 +55,25 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 Open Swagger:
 - `http://localhost:8080/docs`
 
-## 5) Connect Calendar
+## 5) Authentication + Connect Calendar
 
-1. Call `GET /auth/url?user_id=<your-user-id>`.
-2. Open `auth_url` in browser and approve access.
-3. Callback stores OAuth tokens in Firestore: `users/{userId}/oauth/google`.
+1. Create account: `POST /auth/signup` with `{ "email": "...", "password": "..." }`
+2. Log in: `POST /auth/login` and copy `access_token`.
+3. For protected APIs, include header: `Authorization: Bearer <access_token>`.
+4. Call `GET /auth/url` to begin Google OAuth.
+5. Open `auth_url` in browser and approve access.
+6. Callback stores OAuth tokens in Firestore: `users/{userId}/oauth/google`.
 
 ## 6) API Endpoints
 
 - `POST /flow/message`
-  - Body: `{ "user_id": "u1", "message": "When am I free today?" }`
+  - Body: `{ "message": "When am I free today?" }`
 - `POST /flow/confirm`
-  - Body contains the proposed action from `/flow/message`
-- `GET /users/{user_id}/tasks?status=pending`
-- `POST /users/{user_id}/tasks`
-- `PATCH /users/{user_id}/tasks/{task_id}`
-- `DELETE /users/{user_id}/tasks/{task_id}`
+  - Body: `{ "action": { ... } }`
+- `GET /tasks?status=pending`
+- `POST /tasks`
+- `PATCH /tasks/{task_id}`
+- `DELETE /tasks/{task_id}`
 
 ## 7) Cloud Run Deploy
 
@@ -84,8 +90,8 @@ gcloud run deploy flowagent `
   --image gcr.io/woven-answer-492218-v6/flowagent `
   --region asia-south1 `
   --allow-unauthenticated `
-  --set-env-vars GCP_PROJECT_ID=woven-answer-492218-v6,GOOGLE_REDIRECT_URI=https://<cloud-run-url>/auth/callback,ENABLE_API_KEY_AUTH=true,GEMINI_PROJECT_ID=woven-answer-492218-v6,GEMINI_LOCATION=asia-south1,GEMINI_MODEL=gemini-1.5-flash `
-  --set-secrets GOOGLE_CLIENT_ID=flowagent-google-client-id:latest,GOOGLE_CLIENT_SECRET=flowagent-google-client-secret:latest,STATE_SECRET=flowagent-state-secret:latest,APP_API_KEY=flowagent-api-key:latest
+  --set-env-vars GCP_PROJECT_ID=woven-answer-492218-v6,GOOGLE_REDIRECT_URI=https://<cloud-run-url>/auth/callback,GEMINI_PROJECT_ID=woven-answer-492218-v6,GEMINI_LOCATION=asia-south1,GEMINI_MODEL=gemini-1.5-flash `
+  --set-secrets GOOGLE_CLIENT_ID=flowagent-google-client-id:latest,GOOGLE_CLIENT_SECRET=flowagent-google-client-secret:latest,STATE_SECRET=flowagent-state-secret:latest,JWT_SECRET=flowagent-jwt-secret:latest
 ```
 
 Create secrets before deploy:
@@ -94,24 +100,22 @@ Create secrets before deploy:
 echo -n "<google-client-id>" | gcloud secrets create flowagent-google-client-id --data-file=-
 echo -n "<google-client-secret>" | gcloud secrets create flowagent-google-client-secret --data-file=-
 echo -n "<strong-random-state-secret>" | gcloud secrets create flowagent-state-secret --data-file=-
-echo -n "<strong-api-key>" | gcloud secrets create flowagent-api-key --data-file=-
+echo -n "<strong-jwt-secret>" | gcloud secrets create flowagent-jwt-secret --data-file=-
 ```
 
 If a secret already exists, add a new version instead:
 
 ```powershell
-echo -n "<new-value>" | gcloud secrets versions add flowagent-api-key --data-file=-
+echo -n "<new-value>" | gcloud secrets versions add flowagent-jwt-secret --data-file=-
 ```
 
 Grant Cloud Run service account access:
 
 ```powershell
-gcloud secrets add-iam-policy-binding flowagent-api-key `
+gcloud secrets add-iam-policy-binding flowagent-jwt-secret `
   --member="serviceAccount:<cloud-run-service-account>@woven-answer-492218-v6.iam.gserviceaccount.com" `
   --role="roles/secretmanager.secretAccessor"
 ```
-
-API requests to protected endpoints must include header `X-API-Key: <APP_API_KEY>`.
 
 ## 8) Scheduling Rules Implemented
 

@@ -13,6 +13,7 @@ ENV/
 .env
 .env.*
 !.env.example
+.flowagent_local_store.json
 
 # Tooling caches
 .pytest_cache/
