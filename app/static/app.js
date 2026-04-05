@@ -1,7 +1,9 @@
 const els = {
   apiStatus: document.getElementById("apiStatus"),
   userId: document.getElementById("userId"),
+  apiKey: document.getElementById("apiKey"),
   saveUserBtn: document.getElementById("saveUserBtn"),
+  saveApiKeyBtn: document.getElementById("saveApiKeyBtn"),
   connectCalendarBtn: document.getElementById("connectCalendarBtn"),
   chatLog: document.getElementById("chatLog"),
   chatForm: document.getElementById("chatForm"),
@@ -19,6 +21,19 @@ const els = {
 
 let pendingAction = null;
 
+function getApiKey() {
+  return localStorage.getItem("flowagent.apiKey") || "";
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const apiKey = getApiKey();
+  if (apiKey) {
+    headers["X-API-Key"] = apiKey;
+  }
+  return fetch(url, { ...options, headers });
+}
+
 function getUserId() {
   return els.userId.value.trim();
 }
@@ -33,10 +48,27 @@ function saveUserId() {
   pushBot(`Saved user ID: ${userId}`);
 }
 
+function saveApiKey() {
+  const apiKey = (els.apiKey?.value || "").trim();
+  if (!apiKey) {
+    alert("Enter API key first.");
+    return;
+  }
+  localStorage.setItem("flowagent.apiKey", apiKey);
+  pushBot("Saved API key for this browser.");
+}
+
 function loadUserId() {
   const saved = localStorage.getItem("flowagent.userId");
   if (saved) {
     els.userId.value = saved;
+  }
+}
+
+function loadApiKey() {
+  const saved = localStorage.getItem("flowagent.apiKey");
+  if (saved && els.apiKey) {
+    els.apiKey.value = saved;
   }
 }
 
@@ -58,7 +90,7 @@ function pushBot(text) {
 
 async function checkHealth() {
   try {
-    const res = await fetch("/health");
+    const res = await apiFetch("/health");
     if (!res.ok) {
       throw new Error("Health check failed");
     }
@@ -76,7 +108,7 @@ async function connectCalendar() {
     return;
   }
 
-  const res = await fetch(`/auth/url?user_id=${encodeURIComponent(userId)}`);
+  const res = await apiFetch(`/auth/url?user_id=${encodeURIComponent(userId)}`);
   const data = await res.json();
   if (!res.ok) {
     alert(data.detail || "Unable to start auth flow.");
@@ -99,7 +131,7 @@ async function sendMessage(event) {
   els.messageInput.value = "";
 
   try {
-    const res = await fetch("/flow/message", {
+    const res = await apiFetch("/flow/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId, message }),
@@ -129,7 +161,7 @@ async function confirmPendingAction() {
     return;
   }
 
-  const res = await fetch("/flow/confirm", {
+  const res = await apiFetch("/flow/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -179,7 +211,7 @@ async function loadTasks() {
     return;
   }
 
-  const res = await fetch(`/users/${encodeURIComponent(userId)}/tasks?status=pending`);
+  const res = await apiFetch(`/users/${encodeURIComponent(userId)}/tasks?status=pending`);
   const data = await res.json();
   if (!res.ok) {
     pushBot(data.detail || "Could not load tasks.");
@@ -205,7 +237,7 @@ async function createTask(event) {
     estimated_minutes: 60,
   };
 
-  const res = await fetch(`/users/${encodeURIComponent(userId)}/tasks`, {
+  const res = await apiFetch(`/users/${encodeURIComponent(userId)}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -228,7 +260,7 @@ async function completeTask(taskId) {
     return;
   }
 
-  const res = await fetch(`/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}`, {
+  const res = await apiFetch(`/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status: "completed" }),
@@ -250,7 +282,7 @@ async function deleteTask(taskId) {
     return;
   }
 
-  const res = await fetch(`/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}`, {
+  const res = await apiFetch(`/users/${encodeURIComponent(userId)}/tasks/${encodeURIComponent(taskId)}`, {
     method: "DELETE",
   });
 
@@ -266,6 +298,7 @@ async function deleteTask(taskId) {
 
 function wireEvents() {
   els.saveUserBtn.addEventListener("click", saveUserId);
+  els.saveApiKeyBtn.addEventListener("click", saveApiKey);
   els.connectCalendarBtn.addEventListener("click", connectCalendar);
   els.chatForm.addEventListener("submit", sendMessage);
   els.confirmActionBtn.addEventListener("click", confirmPendingAction);
@@ -275,6 +308,7 @@ function wireEvents() {
 
 async function boot() {
   loadUserId();
+  loadApiKey();
   wireEvents();
   await checkHealth();
   await loadTasks();

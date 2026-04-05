@@ -67,7 +67,9 @@ class FlowService:
                     }
                 )
 
-            msg = "Here is your optimized schedule for today:\n" + "\n".join(lines) + "\nShall I add this to your calendar?"
+            has_future_day = any(s["start"].date() != datetime.now(s["start"].tzinfo).date() for s in suggestions)
+            prefix = "Here is your optimized schedule for the next 7 days:\n" if has_future_day else "Here is your optimized schedule for today:\n"
+            msg = prefix + "\n".join(lines) + "\nShall I add this to your calendar?"
             return FlowMessageResponse(
                 response=msg,
                 requires_confirmation=True,

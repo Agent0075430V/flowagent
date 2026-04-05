@@ -18,6 +18,15 @@ class CalendarAgent:
         token_payload = oauth_snap.to_dict() or {}
         return user, token_payload
 
+    def _save_refreshed_token(self, user_id: str, token_payload: dict) -> None:
+        patch = {}
+        if token_payload.get("access_token"):
+            patch["access_token"] = token_payload.get("access_token")
+        if token_payload.get("expiry"):
+            patch["expiry"] = token_payload.get("expiry")
+        if patch:
+            self.fs.oauth_ref(user_id).set(patch, merge=True)
+
     def get_today_events(self, user_id: str) -> tuple[list[dict], str]:
         user, token_payload = self._user_context(user_id)
         tz = user.get("timezone", "Asia/Kolkata")
@@ -25,6 +34,7 @@ class CalendarAgent:
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
         events = self.calendar.list_events(token_payload, tz, day_start, day_end)
+        self._save_refreshed_token(user_id, token_payload)
         return events, tz
 
     def get_week_events(self, user_id: str) -> tuple[list[dict], str]:
@@ -33,12 +43,15 @@ class CalendarAgent:
         start = datetime.now(ZoneInfo(tz))
         end = start + timedelta(days=7)
         events = self.calendar.list_events(token_payload, tz, start, end)
+        self._save_refreshed_token(user_id, token_payload)
         return events, tz
 
     def create_event(self, user_id: str, summary: str, start: datetime, end: datetime, description: str = "") -> dict:
         user, token_payload = self._user_context(user_id)
         tz = user.get("timezone", "Asia/Kolkata")
-        return self.calendar.create_event(token_payload, summary, start, end, tz, description)
+        event = self.calendar.create_event(token_payload, summary, start, end, tz, description)
+        self._save_refreshed_token(user_id, token_payload)
+        return event
 
     def get_free_slots(
         self,
@@ -55,6 +68,7 @@ class CalendarAgent:
         anchor = day.astimezone(local_tz) if day else datetime.now(local_tz)
         day_start = anchor.replace(hour=0, minute=0, second=0, microsecond=0)
         events = self.calendar.list_events(token_payload, tz, day_start, day_start + timedelta(days=1))
+        self._save_refreshed_token(user_id, token_payload)
 
         wh_start_hour, wh_start_minute = map(int, work_start_str.split(":"))
         wh_end_hour, wh_end_minute = map(int, work_end_str.split(":"))

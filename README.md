@@ -84,8 +84,34 @@ gcloud run deploy flowagent `
   --image gcr.io/woven-answer-492218-v6/flowagent `
   --region asia-south1 `
   --allow-unauthenticated `
-  --set-env-vars GCP_PROJECT_ID=woven-answer-492218-v6,GOOGLE_CLIENT_ID=<id>,GOOGLE_CLIENT_SECRET=<secret>,GOOGLE_REDIRECT_URI=https://<cloud-run-url>/auth/callback,STATE_SECRET=<strong-random>
+  --set-env-vars GCP_PROJECT_ID=woven-answer-492218-v6,GOOGLE_REDIRECT_URI=https://<cloud-run-url>/auth/callback,ENABLE_API_KEY_AUTH=true,GEMINI_PROJECT_ID=woven-answer-492218-v6,GEMINI_LOCATION=asia-south1,GEMINI_MODEL=gemini-1.5-flash `
+  --set-secrets GOOGLE_CLIENT_ID=flowagent-google-client-id:latest,GOOGLE_CLIENT_SECRET=flowagent-google-client-secret:latest,STATE_SECRET=flowagent-state-secret:latest,APP_API_KEY=flowagent-api-key:latest
 ```
+
+Create secrets before deploy:
+
+```powershell
+echo -n "<google-client-id>" | gcloud secrets create flowagent-google-client-id --data-file=-
+echo -n "<google-client-secret>" | gcloud secrets create flowagent-google-client-secret --data-file=-
+echo -n "<strong-random-state-secret>" | gcloud secrets create flowagent-state-secret --data-file=-
+echo -n "<strong-api-key>" | gcloud secrets create flowagent-api-key --data-file=-
+```
+
+If a secret already exists, add a new version instead:
+
+```powershell
+echo -n "<new-value>" | gcloud secrets versions add flowagent-api-key --data-file=-
+```
+
+Grant Cloud Run service account access:
+
+```powershell
+gcloud secrets add-iam-policy-binding flowagent-api-key `
+  --member="serviceAccount:<cloud-run-service-account>@woven-answer-492218-v6.iam.gserviceaccount.com" `
+  --role="roles/secretmanager.secretAccessor"
+```
+
+API requests to protected endpoints must include header `X-API-Key: <APP_API_KEY>`.
 
 ## 8) Scheduling Rules Implemented
 

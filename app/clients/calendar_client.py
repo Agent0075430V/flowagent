@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from googleapiclient.errors import HttpError
 from googleapiclient.discovery import build
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -19,8 +23,25 @@ class CalendarClient:
             client_secret=token_payload.get("client_secret"),
             scopes=CALENDAR_SCOPES,
         )
+
+        if not creds.valid:
+            if not creds.refresh_token:
+                raise ValueError("Calendar authorization expired. Reconnect Google Calendar.")
+            try:
+                creds.refresh(Request())
+                token_payload["access_token"] = creds.token
+                token_payload["expiry"] = creds.expiry.isoformat() if creds.expiry else None
+            except RefreshError as exc:
+                raise ValueError("Google token refresh failed. Reconnect Google Calendar.") from exc
+
         return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type((HttpError, TimeoutError, ConnectionError)),
+    )
     def list_events(self, token_payload: dict, tz: str, start: datetime, end: datetime) -> list[dict]:
         service = self._service(token_payload)
         events_result = (
@@ -37,6 +58,12 @@ class CalendarClient:
         )
         return events_result.get("items", [])
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type((HttpError, TimeoutError, ConnectionError)),
+    )
     def create_event(self, token_payload: dict, summary: str, start: datetime, end: datetime, tz: str, description: str = "") -> dict:
         service = self._service(token_payload)
         event_body = {

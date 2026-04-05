@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8080/auth/callback"
 
+    # API key used by backend endpoint guard (X-API-Key header).
+    app_api_key: str = ""
+    enable_api_key_auth: bool = True
+
+    # Gemini/Vertex AI fallback settings for intent classification.
+    use_gemini_intent_fallback: bool = True
+    gemini_project_id: str = ""
+    gemini_location: str = "asia-south1"
+    gemini_model: str = "gemini-1.5-flash"
+
     default_timezone: str = "Asia/Kolkata"
     default_work_start: str = "09:00"
     default_work_end: str = "19:00"
