@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowAgent | Verify Signup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260406" />
+  </head>
+  <body data-page="signup-verify">
+    <main class="auth-shell" aria-label="Signup verification">
+      <a class="back-home" href="/">Back to home</a>
+      <section class="auth-card">
+        <h1 class="auth-title">Verify Your Email</h1>
+        <p class="auth-subtitle">Enter the OTP sent to your email to complete signup.</p>
+
+        <form id="signupOtpForm" class="auth-form">
+          <label class="field-label" for="verifyEmail">Email</label>
+          <input id="verifyEmail" class="text-input" type="email" required placeholder="you@example.com" />
+
+          <label class="field-label" for="verifyOtp">OTP</label>
+          <input id="verifyOtp" class="text-input" type="text" maxlength="6" required placeholder="6-digit code" />
+
+          <button id="verifyOtpBtn" class="btn btn-primary" type="submit">Verify & Create Account</button>
+          <button id="backToSignupBtn" class="btn btn-secondary" type="button">Back to Sign Up</button>
+        </form>
+
+        <p id="verifyMessage" class="auth-message"></p>
+      </section>
+    </main>
+    <script src="/static/app.js?v=20260406" defer></script>
+  </body>
+</html>

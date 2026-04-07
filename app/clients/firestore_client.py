@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from uuid import uuid4
 
+from google.api_core.exceptions import NotFound
 from google.auth.exceptions import DefaultCredentialsError
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -298,16 +299,29 @@ class FirestoreClient:
         self.is_local = False
         self.local_reason: str | None = None
         self._local_store: _LocalStore | None = None
+        self._enable_local_fallback = settings.enable_local_fallback_store
+        self._local_store_file = settings.local_fallback_store_file
 
         try:
             self.db = firestore.Client(project=settings.gcp_project_id, database=settings.firestore_database)
         except DefaultCredentialsError:
-            if not settings.enable_local_fallback_store:
+            if not self._enable_local_fallback:
                 raise
-            self.is_local = True
-            self.local_reason = "missing-google-credentials"
-            self._local_store = _LocalStore(settings.local_fallback_store_file)
-            self.db = None
+            self._activate_local_fallback("missing-google-credentials")
+            return
+
+        if self._enable_local_fallback:
+            try:
+                # Trigger a lightweight metadata call so missing database is detected once at startup.
+                next(self.db.collections(), None)
+            except NotFound:
+                self._activate_local_fallback("missing-firestore-database")
+
+    def _activate_local_fallback(self, reason: str) -> None:
+        self.is_local = True
+        self.local_reason = reason
+        self._local_store = _LocalStore(self._local_store_file)
+        self.db = None
 
     def user_ref(self, user_id: str):
         if self.is_local and self._local_store:
@@ -344,7 +358,7 @@ class FirestoreClient:
         return doc.id, (doc.to_dict() or {})
 
     def create_user_account(self, email: str, password_hash: str, first_name: str = "") -> tuple[str, dict]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         doc_ref = self.user_ref(uuid4().hex if self.is_local else None)
         user_payload = {
             "email": email.lower().strip(),
@@ -372,6 +386,15 @@ class FirestoreClient:
         data = snap.to_dict() or {}
         return data.get("passwordHash")
 
+    def update_user_password_hash(self, user_id: str, password_hash: str) -> None:
+        self.user_auth_ref(user_id).set(
+            {
+                "passwordHash": password_hash,
+                "updatedAt": datetime.now(timezone.utc),
+            },
+            merge=True,
+        )
+
     def upsert_user_defaults(self, user_id: str) -> dict:
         settings = get_settings()
         doc_ref = self.user_ref(user_id)
@@ -382,8 +405,8 @@ class FirestoreClient:
                 "timezone": settings.default_timezone,
                 "workStart": settings.default_work_start,
                 "workEnd": settings.default_work_end,
-                "createdAt": datetime.utcnow(),
-                "updatedAt": datetime.utcnow(),
+                "createdAt": datetime.now(timezone.utc),
+                "updatedAt": datetime.now(timezone.utc),
             }
             doc_ref.set(payload)
             return payload
@@ -397,7 +420,7 @@ class FirestoreClient:
         if "workEnd" not in data:
             patch["workEnd"] = settings.default_work_end
         if patch:
-            patch["updatedAt"] = datetime.utcnow()
+            patch["updatedAt"] = datetime.now(timezone.utc)
             doc_ref.set(patch, merge=True)
             data.update(patch)
         return data

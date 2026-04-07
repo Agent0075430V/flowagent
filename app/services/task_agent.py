@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.clients.firestore_client import FirestoreClient
@@ -33,12 +33,12 @@ class TaskAgent:
                     updated_at=data.get("updatedAt"),
                 )
             )
-        result.sort(key=lambda t: (t.status, t.priority, t.due_at or datetime.max))
+        result.sort(key=lambda t: (t.status, t.priority, t.due_at or datetime.max.replace(tzinfo=timezone.utc)))
         return result
 
     def create_task(self, user_id: str, payload: TaskCreate) -> TaskOut:
         self.fs.upsert_user_defaults(user_id)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         doc_data = {
             "title": payload.title,
             "dueAt": payload.due_at,
@@ -85,7 +85,7 @@ class TaskAgent:
         for key, value in mapping.items():
             if value is not None:
                 patch[key] = value
-        patch["updatedAt"] = datetime.utcnow()
+        patch["updatedAt"] = datetime.now(timezone.utc)
 
         ref.set(patch, merge=True)
         merged = snap.to_dict() or {}

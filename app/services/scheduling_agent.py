@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from dateparser import parse as parse_date
+from dateparser.search import search_dates
 
 from app.services.calendar_agent import CalendarAgent
 
@@ -37,6 +38,52 @@ class SchedulingAgent:
     def _to_ampm(dt: datetime) -> str:
         return dt.strftime("%I:%M %p").lstrip("0")
 
+    @staticmethod
+    def _extract_requested_datetime(message: str, tz: str) -> datetime | None:
+        settings = {
+            "TIMEZONE": tz,
+            "TO_TIMEZONE": tz,
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "PREFER_DATES_FROM": "future",
+        }
+
+        parsed = parse_date(message, settings=settings)
+        if parsed:
+            return parsed
+
+        matches = search_dates(message, settings=settings) or []
+        if not matches:
+            return None
+
+        def has_explicit_time(fragment: str, dt: datetime) -> bool:
+            text = fragment.lower()
+            if any(token in text for token in ["am", "pm", ":", "noon", "midnight"]):
+                return True
+            return dt.hour != 0 or dt.minute != 0
+
+        timed = [dt for fragment, dt in matches if has_explicit_time(fragment, dt)]
+        if timed:
+            return timed[-1]
+
+        time_match = re.search(
+            r"\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{1,2}:\d{2}|noon|midnight)\b",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if time_match:
+            time_fragment = time_match.group(0)
+            date_only = [fragment for fragment, dt in matches if not has_explicit_time(fragment, dt)]
+            if date_only:
+                combined = parse_date(f"{date_only[-1]} {time_fragment}", settings=settings)
+                if combined:
+                    return combined
+
+            time_only = parse_date(time_fragment, settings=settings)
+            if time_only:
+                return time_only
+
+        return matches[-1][1]
+
     def propose_slot(self, user_id: str, message: str) -> dict:
         events, tz = self.calendar.get_today_events(user_id)
         _ = events  # ensures fresh calendar read before schedule answers
@@ -46,15 +93,7 @@ class SchedulingAgent:
         local_tz = ZoneInfo(tz)
         now = datetime.now(local_tz)
 
-        parsed = parse_date(
-            message,
-            settings={
-                "TIMEZONE": tz,
-                "TO_TIMEZONE": tz,
-                "RETURN_AS_TIMEZONE_AWARE": True,
-                "PREFER_DATES_FROM": "future",
-            },
-        )
+        parsed = self._extract_requested_datetime(message, tz)
 
         if parsed and "before noon" not in message.lower() and "sometime" not in message.lower():
             start = parsed.astimezone(local_tz)

@@ -34,14 +34,36 @@
             <button id="logoutBtn" class="btn btn-secondary">Log Out</button>
           </section>
 
-          <section class="sidebar-block" id="calendarConnectWrap">
-            <button id="connectCalendarBtn" class="btn btn-primary full-width">Connect Calendar</button>
+          <section class="sidebar-block" id="profileSection">
+            <div class="section-header">Profile Dashboard</div>
+            <div class="profile-grid">
+              <div class="profile-item">
+                <p class="profile-label">Name</p>
+                <p class="profile-value" id="profileName">-</p>
+              </div>
+              <div class="profile-item">
+                <p class="profile-label">Email</p>
+                <p class="profile-value" id="profileEmail">-</p>
+              </div>
+              <div class="profile-item">
+                <p class="profile-label">Pending Tasks</p>
+                <p class="profile-value" id="profilePendingCount">0</p>
+              </div>
+              <div class="profile-item">
+                <p class="profile-label">Completed Tasks</p>
+                <p class="profile-value" id="profileCompletedCount">0</p>
+              </div>
+            </div>
           </section>
 
           <section class="sidebar-block" id="tasksSection">
             <div class="section-header">Tasks</div>
             <form id="taskForm" class="task-form">
               <input id="taskTitle" class="text-input" placeholder="Task title" required />
+              <div class="task-controls">
+                <input id="taskDate" class="text-input" type="date" />
+                <input id="taskTime" class="text-input" type="time" />
+              </div>
               <div class="task-controls">
                 <select id="taskPriority" class="text-input">
                   <option value="urgent">urgent</option>
@@ -103,6 +125,27 @@
           </div>
           <div id="timeline" class="timeline"></div>
         </section>
+
+        <div id="scheduleModal" class="modal-overlay hidden" aria-hidden="true">
+          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="scheduleModalHeading">
+            <h2 id="scheduleModalHeading" class="modal-title">Add to schedule</h2>
+            <form id="scheduleModalForm" class="auth-form">
+              <label class="field-label" for="scheduleModalTitle">What should be added?</label>
+              <input id="scheduleModalTitle" class="text-input" type="text" required placeholder="e.g. Team sync" />
+
+              <label class="field-label" for="scheduleModalDate">Date</label>
+              <input id="scheduleModalDate" class="text-input" type="date" required />
+
+              <label class="field-label" for="scheduleModalTime">Time</label>
+              <input id="scheduleModalTime" class="text-input" type="time" required />
+
+              <div class="task-controls">
+                <button type="submit" class="btn btn-primary">Add</button>
+                <button id="scheduleModalCancelBtn" type="button" class="btn btn-secondary">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
 
         <aside class="right-panel" id="rightPanel">
           <div class="section-header">AI Chat</div>

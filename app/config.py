@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     gcp_project_id: str = "woven-answer-492218-v6"
     firestore_database: str = "(default)"
-    enable_local_fallback_store: bool = True
+    enable_local_fallback_store: bool = False
     local_fallback_store_file: str = ".flowagent_local_store.json"
 
     google_client_id: str = ""
@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     # Use a strong random value in production for signing ephemeral state payloads.
     state_secret: str = ""
     oauth_state_ttl_seconds: int = 600
+
+    otp_ttl_seconds: int = 600
+    otp_store_file: str = ".flowagent_otp_store.json"
+    otp_dev_echo: bool = False
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

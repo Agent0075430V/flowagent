@@ -69,7 +69,7 @@ class FlowService:
 
             has_future_day = any(s["start"].date() != datetime.now(s["start"].tzinfo).date() for s in suggestions)
             prefix = "Here is your optimized schedule for the next 7 days:\n" if has_future_day else "Here is your optimized schedule for today:\n"
-            msg = prefix + "\n".join(lines) + "\nShall I add this to your calendar?"
+            msg = prefix + "\n".join(lines) + "\nShall I add this to your local calendar?"
             return FlowMessageResponse(
                 response=msg,
                 requires_confirmation=True,
@@ -126,7 +126,7 @@ class FlowService:
                         TaskUpdate(calendar_event_id=event.get("id")),
                     )
 
-            return f"Done. Added {created_count} event(s) to your calendar."
+            return f"Done. Added {created_count} event(s) to your local calendar."
 
         if action_type == "task.create":
             task_payload = payload.get("task")

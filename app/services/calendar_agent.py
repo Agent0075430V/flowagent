@@ -1,57 +1,101 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.clients.calendar_client import CalendarClient
 from app.clients.firestore_client import FirestoreClient
 
 
 class CalendarAgent:
     def __init__(self) -> None:
         self.fs = FirestoreClient()
-        self.calendar = CalendarClient()
 
     def _user_context(self, user_id: str) -> tuple[dict, dict]:
         user = self.fs.upsert_user_defaults(user_id)
-        oauth_snap = self.fs.oauth_ref(user_id).get()
-        if not oauth_snap.exists:
-            raise ValueError("Google Calendar is not connected. Complete OAuth first.")
-        token_payload = oauth_snap.to_dict() or {}
-        return user, token_payload
+        return user, {}
+
+    @staticmethod
+    def _to_local_dt(value, tz: str) -> datetime | None:
+        if value is None:
+            return None
+        local_tz = ZoneInfo(tz)
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=local_tz)
+            return value.astimezone(local_tz)
+        if isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=local_tz)
+            return parsed.astimezone(local_tz)
+        return None
+
+    def _local_events_between(self, user_id: str, tz: str, start: datetime, end: datetime) -> list[dict]:
+        events: list[dict] = []
+        for doc in self.fs.task_collection(user_id).stream():
+            data = doc.to_dict() or {}
+            due_at = self._to_local_dt(data.get("dueAt"), tz)
+            if not due_at:
+                continue
+            duration = max(15, int(data.get("estimatedMinutes", 60) or 60))
+            event_end = due_at + timedelta(minutes=duration)
+            if event_end <= start or due_at >= end:
+                continue
+            events.append(
+                {
+                    "id": data.get("calendarEventId") or f"local-{doc.id}",
+                    "summary": data.get("title", "Task"),
+                    "start": due_at,
+                    "end": event_end,
+                }
+            )
+        events.sort(key=lambda item: item["start"])
+        return events
 
     def _save_refreshed_token(self, user_id: str, token_payload: dict) -> None:
-        patch = {}
-        if token_payload.get("access_token"):
-            patch["access_token"] = token_payload.get("access_token")
-        if token_payload.get("expiry"):
-            patch["expiry"] = token_payload.get("expiry")
-        if patch:
-            self.fs.oauth_ref(user_id).set(patch, merge=True)
+        _ = (user_id, token_payload)
 
     def get_today_events(self, user_id: str) -> tuple[list[dict], str]:
-        user, token_payload = self._user_context(user_id)
+        user, _ = self._user_context(user_id)
         tz = user.get("timezone", "Asia/Kolkata")
         now = datetime.now(ZoneInfo(tz))
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + timedelta(days=1)
-        events = self.calendar.list_events(token_payload, tz, day_start, day_end)
-        self._save_refreshed_token(user_id, token_payload)
+        events = self._local_events_between(user_id, tz, day_start, day_end)
         return events, tz
 
     def get_week_events(self, user_id: str) -> tuple[list[dict], str]:
-        user, token_payload = self._user_context(user_id)
+        user, _ = self._user_context(user_id)
         tz = user.get("timezone", "Asia/Kolkata")
         start = datetime.now(ZoneInfo(tz))
         end = start + timedelta(days=7)
-        events = self.calendar.list_events(token_payload, tz, start, end)
-        self._save_refreshed_token(user_id, token_payload)
+        events = self._local_events_between(user_id, tz, start, end)
         return events, tz
 
     def create_event(self, user_id: str, summary: str, start: datetime, end: datetime, description: str = "") -> dict:
-        user, token_payload = self._user_context(user_id)
-        tz = user.get("timezone", "Asia/Kolkata")
-        event = self.calendar.create_event(token_payload, summary, start, end, tz, description)
-        self._save_refreshed_token(user_id, token_payload)
-        return event
+        _ = description
+        tz = self.fs.upsert_user_defaults(user_id).get("timezone", "Asia/Kolkata")
+        start_local = start.astimezone(ZoneInfo(tz)) if start.tzinfo else start.replace(tzinfo=ZoneInfo(tz))
+        end_local = end.astimezone(ZoneInfo(tz)) if end.tzinfo else end.replace(tzinfo=ZoneInfo(tz))
+        minutes = max(15, int((end_local - start_local).total_seconds() // 60))
+        doc_ref = self.fs.task_collection(user_id).document()
+        now = datetime.now(ZoneInfo(tz))
+        event_id = f"local-{doc_ref.id}"
+        doc_ref.set(
+            {
+                "title": summary,
+                "dueAt": start_local,
+                "priority": "medium",
+                "tag": "work",
+                "status": "pending",
+                "estimatedMinutes": minutes,
+                "calendarEventId": event_id,
+                "createdAt": now,
+                "updatedAt": now,
+            }
+        )
+        return {"id": event_id, "summary": summary, "start": start_local.isoformat(), "end": end_local.isoformat()}
 
     def get_free_slots(
         self,
@@ -59,7 +103,7 @@ class CalendarAgent:
         day: datetime | None = None,
         minimum_minutes: int = 30,
     ) -> tuple[list[tuple[datetime, datetime]], str]:
-        user, token_payload = self._user_context(user_id)
+        user, _ = self._user_context(user_id)
         tz = user.get("timezone", "Asia/Kolkata")
         work_start_str = user.get("workStart", "09:00")
         work_end_str = user.get("workEnd", "19:00")
@@ -67,8 +111,7 @@ class CalendarAgent:
         local_tz = ZoneInfo(tz)
         anchor = day.astimezone(local_tz) if day else datetime.now(local_tz)
         day_start = anchor.replace(hour=0, minute=0, second=0, microsecond=0)
-        events = self.calendar.list_events(token_payload, tz, day_start, day_start + timedelta(days=1))
-        self._save_refreshed_token(user_id, token_payload)
+        events = self._local_events_between(user_id, tz, day_start, day_start + timedelta(days=1))
 
         wh_start_hour, wh_start_minute = map(int, work_start_str.split(":"))
         wh_end_hour, wh_end_minute = map(int, work_end_str.split(":"))
@@ -78,9 +121,8 @@ class CalendarAgent:
 
         busy: list[tuple[datetime, datetime]] = []
         for event in events:
-            st, en = self.calendar.parse_event_time(event, tz)
-            st_local = st.astimezone(local_tz)
-            en_local = en.astimezone(local_tz)
+            st_local = event["start"].astimezone(local_tz)
+            en_local = event["end"].astimezone(local_tz)
             busy.append((st_local - timedelta(minutes=15), en_local + timedelta(minutes=15)))
 
         busy.sort(key=lambda x: x[0])

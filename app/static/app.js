@@ -43,11 +43,7 @@ function navigateTo(path) {
     window.location.href = path;
     return;
   }
-
-  document.body.classList.add("page-leave");
-  setTimeout(() => {
-    window.location.href = path;
-  }, 170);
+  window.location.href = path;
 }
 
 function enablePageTransitions() {
@@ -87,6 +83,11 @@ function parseQueryMode() {
   const params = new URLSearchParams(window.location.search);
   const mode = (params.get("mode") || "").toLowerCase();
   return mode === "signup" ? "signup" : "login";
+}
+
+function parseQueryEmail() {
+  const params = new URLSearchParams(window.location.search);
+  return (params.get("email") || "").trim();
 }
 
 async function readApiPayload(response) {
@@ -160,7 +161,10 @@ function initAuthPage() {
   const authEmail = document.getElementById("authEmail");
   const authPassword = document.getElementById("authPassword");
   const authConfirmPassword = document.getElementById("authConfirmPassword");
+  const authFirstName = document.getElementById("authFirstName");
+  const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
   const confirmWrap = document.getElementById("confirmPasswordWrap");
+  const firstNameWrap = document.getElementById("firstNameWrap");
   const tabs = Array.from(document.querySelectorAll(".auth-tab"));
 
   let mode = parseQueryMode();
@@ -175,10 +179,22 @@ function initAuthPage() {
     if (confirmWrap) {
       confirmWrap.classList.toggle("hidden", !isSignup);
     }
+    if (firstNameWrap) {
+      firstNameWrap.classList.toggle("hidden", !isSignup);
+    }
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.classList.toggle("hidden", isSignup);
+    }
     if (authConfirmPassword) {
       authConfirmPassword.required = isSignup;
       if (!isSignup) {
         authConfirmPassword.value = "";
+      }
+    }
+    if (authFirstName) {
+      authFirstName.required = isSignup;
+      if (!isSignup) {
+        authFirstName.value = "";
       }
     }
     if (authSubmitBtn) {
@@ -203,6 +219,7 @@ function initAuthPage() {
 
     const email = (authEmail.value || "").trim();
     const password = (authPassword.value || "").trim();
+    const firstName = (authFirstName?.value || "").trim();
 
     if (!email || !password) {
       if (authMessage) {
@@ -221,31 +238,55 @@ function initAuthPage() {
         }
         return;
       }
+      if (!firstName) {
+        if (authMessage) {
+          authMessage.textContent = "First name is required for signup.";
+          authMessage.className = "auth-message error";
+        }
+        return;
+      }
     }
 
     try {
-      const endpoint = mode === "signup" ? "/auth/signup" : "/auth/login";
-      const response = await apiFetch(endpoint, {
+      if (mode === "signup") {
+        const requestOtpResponse = await apiFetch("/auth/signup/request-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, first_name: firstName }),
+        });
+        const requestOtpData = await readApiPayload(requestOtpResponse);
+
+        if (!requestOtpResponse.ok) {
+          if (authMessage) {
+            authMessage.textContent = requestOtpData.detail || `Signup failed (${requestOtpResponse.status}).`;
+            authMessage.className = "auth-message error";
+          }
+          return;
+        }
+        navigateTo(`/static/signup-verify.html?email=${encodeURIComponent(email)}`);
+        return;
+      }
+
+      const loginResponse = await apiFetch("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await readApiPayload(response);
-
-      if (!response.ok) {
+      const loginData = await readApiPayload(loginResponse);
+      if (!loginResponse.ok) {
         if (authMessage) {
-          authMessage.textContent = data.detail || `Authentication failed (${response.status}).`;
+          authMessage.textContent = loginData.detail || `Authentication failed (${loginResponse.status}).`;
           authMessage.className = "auth-message error";
         }
         return;
       }
 
-      setCurrentUserSession(data);
+      setCurrentUserSession(loginData);
       if (authMessage) {
-        authMessage.textContent = mode === "signup" ? "Account created. Redirecting..." : "Logged in. Redirecting...";
+        authMessage.textContent = "Logged in. Redirecting...";
         authMessage.className = "auth-message success";
       }
-      setTimeout(() => navigateTo("/static/dashboard.html"), 450);
+      navigateTo("/static/dashboard.html");
     } catch {
       if (authMessage) {
         authMessage.textContent = "Unable to reach the API.";
@@ -254,7 +295,177 @@ function initAuthPage() {
     }
   });
 
+  if (forgotPasswordBtn) {
+    forgotPasswordBtn.addEventListener("click", () => {
+      navigateTo("/static/forgot-password.html");
+    });
+  }
+
   setMode(mode);
+}
+
+function initSignupVerifyPage() {
+  if (getAccessToken()) {
+    navigateTo("/static/dashboard.html");
+    return;
+  }
+
+  const backHomeLink = document.querySelector(".back-home");
+  if (backHomeLink) {
+    backHomeLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigateTo("/");
+    });
+  }
+
+  const form = document.getElementById("signupOtpForm");
+  const emailInput = document.getElementById("verifyEmail");
+  const otpInput = document.getElementById("verifyOtp");
+  const message = document.getElementById("verifyMessage");
+  const backBtn = document.getElementById("backToSignupBtn");
+
+  if (emailInput) {
+    emailInput.value = parseQueryEmail();
+  }
+
+  if (backBtn) {
+    backBtn.addEventListener("click", () => navigateTo("/static/auth.html?mode=signup"));
+  }
+
+  if (!form || !emailInput || !otpInput || !message) {
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = (emailInput.value || "").trim();
+    const otp = (otpInput.value || "").trim();
+    if (!email || !otp) {
+      message.textContent = "Enter email and OTP.";
+      message.className = "auth-message error";
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/auth/signup/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await readApiPayload(response);
+      if (!response.ok) {
+        message.textContent = data.detail || "OTP verification failed.";
+        message.className = "auth-message error";
+        return;
+      }
+
+      setCurrentUserSession(data);
+      message.textContent = "Account verified. Redirecting...";
+      message.className = "auth-message success";
+      navigateTo("/static/dashboard.html");
+    } catch {
+      message.textContent = "Unable to reach API.";
+      message.className = "auth-message error";
+    }
+  });
+}
+
+function initForgotPasswordPage() {
+  const backHomeLink = document.querySelector(".back-home");
+  if (backHomeLink) {
+    backHomeLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigateTo("/");
+    });
+  }
+
+  const requestBtn = document.getElementById("requestResetOtpBtn");
+  const resetForm = document.getElementById("forgotPasswordForm");
+  const emailInput = document.getElementById("forgotEmail");
+  const otpInput = document.getElementById("forgotOtp");
+  const newPasswordInput = document.getElementById("forgotNewPassword");
+  const confirmInput = document.getElementById("forgotConfirmPassword");
+  const stepTwo = document.getElementById("forgotStepTwo");
+  const message = document.getElementById("forgotMessage");
+
+  if (!requestBtn || !resetForm || !emailInput || !otpInput || !newPasswordInput || !confirmInput || !stepTwo || !message) {
+    return;
+  }
+
+  requestBtn.addEventListener("click", async () => {
+    const email = (emailInput.value || "").trim();
+    if (!email) {
+      message.textContent = "Enter your email first.";
+      message.className = "auth-message error";
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/auth/password/forgot/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await readApiPayload(response);
+      if (!response.ok) {
+        message.textContent = data.detail || "Could not send OTP.";
+        message.className = "auth-message error";
+        return;
+      }
+
+      stepTwo.classList.remove("hidden");
+      message.textContent = "OTP sent. Enter OTP and your new password.";
+      message.className = "auth-message success";
+    } catch {
+      message.textContent = "Unable to reach API.";
+      message.className = "auth-message error";
+    }
+  });
+
+  resetForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (stepTwo.classList.contains("hidden")) {
+      message.textContent = "Click Send OTP first.";
+      message.className = "auth-message error";
+      return;
+    }
+    const email = (emailInput.value || "").trim();
+    const otp = (otpInput.value || "").trim();
+    const newPassword = (newPasswordInput.value || "").trim();
+    const confirmPassword = (confirmInput.value || "").trim();
+
+    if (!email || !otp || !newPassword || !confirmPassword) {
+      message.textContent = "Fill all reset fields.";
+      message.className = "auth-message error";
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      message.textContent = "Passwords do not match.";
+      message.className = "auth-message error";
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/auth/password/forgot/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, new_password: newPassword }),
+      });
+      const data = await readApiPayload(response);
+      if (!response.ok) {
+        message.textContent = data.detail || "Password reset failed.";
+        message.className = "auth-message error";
+        return;
+      }
+
+      message.textContent = "Password reset successful. Redirecting to login...";
+      message.className = "auth-message success";
+      navigateTo("/static/auth.html?mode=login");
+    } catch {
+      message.textContent = "Unable to reach API.";
+      message.className = "auth-message error";
+    }
+  });
 }
 
 function initDashboardPage() {
@@ -270,20 +481,30 @@ function initDashboardPage() {
     userEmail: document.getElementById("userEmail"),
     calendarStatusPill: document.getElementById("calendarStatusPill"),
     logoutBtn: document.getElementById("logoutBtn"),
-    calendarConnectWrap: document.getElementById("calendarConnectWrap"),
-    connectCalendarBtn: document.getElementById("connectCalendarBtn"),
     taskForm: document.getElementById("taskForm"),
     taskTitle: document.getElementById("taskTitle"),
+    taskDate: document.getElementById("taskDate"),
+    taskTime: document.getElementById("taskTime"),
     taskPriority: document.getElementById("taskPriority"),
     taskTag: document.getElementById("taskTag"),
     refreshTasksBtn: document.getElementById("refreshTasksBtn"),
     taskList: document.getElementById("taskList"),
+    profileName: document.getElementById("profileName"),
+    profileEmail: document.getElementById("profileEmail"),
+    profilePendingCount: document.getElementById("profilePendingCount"),
+    profileCompletedCount: document.getElementById("profileCompletedCount"),
     calendarMonthLabel: document.getElementById("calendarMonthLabel"),
     calDays: document.getElementById("calDays"),
     freeSlots: document.getElementById("freeSlots"),
     scheduleTitle: document.getElementById("scheduleTitle"),
     timeline: document.getElementById("timeline"),
     addEventBtn: document.getElementById("addEventBtn"),
+    scheduleModal: document.getElementById("scheduleModal"),
+    scheduleModalForm: document.getElementById("scheduleModalForm"),
+    scheduleModalTitle: document.getElementById("scheduleModalTitle"),
+    scheduleModalDate: document.getElementById("scheduleModalDate"),
+    scheduleModalTime: document.getElementById("scheduleModalTime"),
+    scheduleModalCancelBtn: document.getElementById("scheduleModalCancelBtn"),
     viewTabs: document.querySelectorAll(".view-tab"),
     chatLog: document.getElementById("chatLog"),
     quickChips: document.getElementById("quickChips"),
@@ -296,8 +517,44 @@ function initDashboardPage() {
 
   let pendingAction = null;
   let tasksCache = [];
+  let allTasksCache = [];
   let timelineEvents = [];
-  let calendarConnected = false;
+  let calendarConnected = true;
+  let selectedDate = new Date();
+
+  function formatDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatDateForInput(date) {
+    return formatDateKey(date);
+  }
+
+  function toDateFromInput(value) {
+    const [year, month, day] = (value || "").split("-").map(Number);
+    if (!year || !month || !day) {
+      return null;
+    }
+    return new Date(year, month - 1, day);
+  }
+
+  function selectedDateLabel() {
+    return selectedDate.toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+  }
+
+  function renderSelectedDateHeader() {
+    if (!els.scheduleTitle) {
+      return;
+    }
+    els.scheduleTitle.textContent = selectedDateLabel();
+  }
 
   function setAgentStatus() {
     const states = {
@@ -382,7 +639,7 @@ function initDashboardPage() {
 
       const email = data.email || "";
       const firstName = data.first_name || "";
-      calendarConnected = !!data.calendar_connected;
+      calendarConnected = true;
       setCurrentUserSession({
         access_token: getAccessToken(),
         user_id: data.user_id,
@@ -399,13 +656,16 @@ function initDashboardPage() {
         const source = firstName || email || "FA";
         els.userAvatar.textContent = source.slice(0, 2).toUpperCase();
       }
+      if (els.profileName) {
+        els.profileName.textContent = firstName || (email ? email.split("@")[0] : "-");
+      }
+      if (els.profileEmail) {
+        els.profileEmail.textContent = email || "-";
+      }
       if (els.calendarStatusPill) {
         els.calendarStatusPill.classList.toggle("connected", calendarConnected);
         els.calendarStatusPill.classList.toggle("disconnected", !calendarConnected);
-        els.calendarStatusPill.textContent = calendarConnected ? "Calendar connected" : "Calendar not connected";
-      }
-      if (els.calendarConnectWrap) {
-        els.calendarConnectWrap.classList.toggle("hidden", calendarConnected);
+        els.calendarStatusPill.textContent = "Local calendar active";
       }
       setAgentStatus();
     } catch {
@@ -463,11 +723,19 @@ function initDashboardPage() {
     }
 
     for (const task of tasks) {
+      const dueText = task.due_at
+        ? new Date(task.due_at).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "No due time";
       const row = document.createElement("li");
       row.className = "task-item";
       row.innerHTML = `
         <button class="task-check" data-action="complete" data-task-id="${task.id}" title="Mark complete"></button>
-        <div class="task-text">${escapeHtml(task.title)} <span class="task-tag ${tagClass(task.tag, task.priority)}">${escapeHtml(task.priority)}</span></div>
+        <div class="task-text">${escapeHtml(task.title)} <span class="task-tag ${tagClass(task.tag, task.priority)}">${escapeHtml(task.priority)}</span><div class="task-due">${escapeHtml(dueText)}</div></div>
         <div class="task-row-actions">
           <button class="tiny-btn" data-action="schedule" data-task-id="${task.id}">Plan</button>
           <button class="tiny-btn danger" data-action="delete" data-task-id="${task.id}">Del</button>
@@ -482,13 +750,36 @@ function initDashboardPage() {
 
   async function loadTasks() {
     try {
-      const response = await apiFetch("/tasks?status=pending");
-      const data = await response.json();
-      if (!response.ok) {
-        addBotMessage(data.detail || "Could not load tasks.");
+      const [pendingResponse, allResponse] = await Promise.all([
+        apiFetch("/tasks?status=pending"),
+        apiFetch("/tasks"),
+      ]);
+
+      const pendingData = await pendingResponse.json();
+      const allData = await allResponse.json();
+
+      if (!pendingResponse.ok) {
+        addBotMessage(pendingData.detail || "Could not load tasks.");
         return;
       }
-      renderTasks(data);
+      if (!allResponse.ok) {
+        addBotMessage(allData.detail || "Could not load task stats.");
+        return;
+      }
+
+      allTasksCache = Array.isArray(allData) ? allData : [];
+      if (els.profilePendingCount) {
+        els.profilePendingCount.textContent = String(
+          allTasksCache.filter((task) => task.status === "pending").length
+        );
+      }
+      if (els.profileCompletedCount) {
+        els.profileCompletedCount.textContent = String(
+          allTasksCache.filter((task) => task.status === "completed").length
+        );
+      }
+
+      renderTasks(Array.isArray(pendingData) ? pendingData : []);
     } catch {
       addBotMessage("Unable to reach API.");
     }
@@ -498,8 +789,26 @@ function initDashboardPage() {
     event.preventDefault();
     const title = (els.taskTitle?.value || "").trim();
     if (!title) {
-      alert("Enter a task title.");
+      if (els.taskTitle) {
+        els.taskTitle.setCustomValidity("Please enter a task title.");
+        els.taskTitle.reportValidity();
+        els.taskTitle.setCustomValidity("");
+      }
       return;
+    }
+
+    let dueAt = null;
+    const dueDate = (els.taskDate?.value || "").trim();
+    const dueTime = (els.taskTime?.value || "").trim();
+    if ((dueDate && !dueTime) || (!dueDate && dueTime)) {
+      addBotMessage("Select both date and time for a scheduled task.");
+      return;
+    }
+    if (dueDate && dueTime) {
+      const composed = new Date(`${dueDate}T${dueTime}:00`);
+      if (!Number.isNaN(composed.getTime())) {
+        dueAt = composed.toISOString();
+      }
     }
 
     const response = await apiFetch("/tasks", {
@@ -507,6 +816,7 @@ function initDashboardPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
+        due_at: dueAt,
         priority: els.taskPriority?.value || "medium",
         tag: els.taskTag?.value || "work",
         estimated_minutes: 60,
@@ -521,6 +831,12 @@ function initDashboardPage() {
 
     if (els.taskTitle) {
       els.taskTitle.value = "";
+    }
+    if (els.taskDate) {
+      els.taskDate.value = "";
+    }
+    if (els.taskTime) {
+      els.taskTime.value = "";
     }
     addBotMessage(`Added task: ${data.title}`);
     await loadTasks();
@@ -561,22 +877,43 @@ function initDashboardPage() {
   function timeRows() {
     const rows = [];
     for (let hour = 9; hour <= 19; hour += 1) {
-      const display = hour === 12 ? "12 PM" : hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
-      rows.push({ hour, label: display, events: [] });
+      rows.push({ hour, label: formatHourLabel(hour), events: [] });
     }
     return rows;
   }
 
+  function formatHourLabel(hour) {
+    if (hour === 0) {
+      return "12 AM";
+    }
+    if (hour === 12) {
+      return "12 PM";
+    }
+    if (hour > 12) {
+      return `${hour - 12} PM`;
+    }
+    return `${hour} AM`;
+  }
+
   function deriveEventsFromTasks() {
     const rows = timeRows();
-    const baseHours = [10, 13, 16, 18];
-    const blocks = tasksCache.slice(0, 4);
+    const selectedKey = formatDateKey(selectedDate);
 
-    for (let index = 0; index < blocks.length; index += 1) {
-      const task = blocks[index];
-      const row = rows.find((item) => item.hour === baseHours[index]);
+    const dueBlocks = tasksCache
+      .filter((task) => task.due_at)
+      .filter((task) => {
+        const dueDate = new Date(task.due_at);
+        return !Number.isNaN(dueDate.getTime()) && formatDateKey(dueDate) === selectedKey;
+      });
+
+    for (const task of dueBlocks) {
+      const dueDate = new Date(task.due_at);
+      const dueHour = dueDate.getHours();
+      let row = rows.find((item) => item.hour === dueHour);
       if (!row) {
-        continue;
+        row = { hour: dueHour, label: formatHourLabel(dueHour), events: [] };
+        rows.push(row);
+        rows.sort((a, b) => a.hour - b.hour);
       }
 
       let cssClass = "ev-work";
@@ -590,9 +927,39 @@ function initDashboardPage() {
 
       row.events.push({
         title: task.title,
-        sub: `${task.priority} priority • ${task.tag}`,
+        sub: `${dueDate.toLocaleTimeString("en-IN", {
+          hour: "numeric",
+          minute: "2-digit",
+        })} • ${task.priority} • ${task.tag}`,
         cls: cssClass,
       });
+    }
+
+    if (!dueBlocks.length && selectedKey === formatDateKey(new Date())) {
+      const baseHours = [10, 13, 16, 18];
+      const blocks = tasksCache.filter((task) => !task.due_at).slice(0, 4);
+      for (let index = 0; index < blocks.length; index += 1) {
+        const task = blocks[index];
+        const row = rows.find((item) => item.hour === baseHours[index]);
+        if (!row) {
+          continue;
+        }
+
+        let cssClass = "ev-work";
+        if (task.tag === "personal") {
+          cssClass = "ev-personal";
+        } else if (task.tag === "health") {
+          cssClass = "ev-free";
+        } else if (task.tag === "learning") {
+          cssClass = "ev-focus";
+        }
+
+        row.events.push({
+          title: task.title,
+          sub: `${task.priority} priority • ${task.tag}`,
+          cls: cssClass,
+        });
+      }
     }
 
     return rows;
@@ -607,7 +974,7 @@ function initDashboardPage() {
     const hasEvents = rows.some((row) => row.events.length > 0);
 
     if (!hasEvents) {
-      els.timeline.innerHTML = '<div class="timeline-empty">No events yet — connect your calendar to get started</div>';
+      els.timeline.innerHTML = '<div class="timeline-empty">No events for this day yet. Add tasks with date/time or connect your calendar.</div>';
       return;
     }
 
@@ -635,11 +1002,12 @@ function initDashboardPage() {
       return;
     }
 
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const selectedKey = formatDateKey(selectedDate);
 
-    els.calendarMonthLabel.textContent = now.toLocaleString("en-IN", {
+    els.calendarMonthLabel.textContent = selectedDate.toLocaleString("en-IN", {
       month: "long",
       year: "numeric",
     });
@@ -649,14 +1017,58 @@ function initDashboardPage() {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const prevMonthDays = new Date(year, month, 0).getDate();
 
+    const workloadByDate = new Map();
+    for (const task of allTasksCache) {
+      if (task.status !== "pending" || !task.due_at) {
+        continue;
+      }
+      const dueDate = new Date(task.due_at);
+      if (Number.isNaN(dueDate.getTime())) {
+        continue;
+      }
+      if (dueDate.getFullYear() !== year || dueDate.getMonth() !== month) {
+        continue;
+      }
+
+      const key = formatDateKey(dueDate);
+      const weight = Math.max(15, Number(task.estimated_minutes || 60));
+      workloadByDate.set(key, (workloadByDate.get(key) || 0) + weight);
+    }
+
+    const workloadClassForDate = (dateKey) => {
+      const score = workloadByDate.get(dateKey) || 0;
+      if (score >= 240) {
+        return "workload-high";
+      }
+      if (score >= 120) {
+        return "workload-medium";
+      }
+      if (score > 0) {
+        return "workload-low";
+      }
+      return "";
+    };
+
     let html = "";
     for (let i = startOffset - 1; i >= 0; i -= 1) {
       html += `<div class="cal-day other-month">${prevMonthDays - i}</div>`;
     }
 
     for (let day = 1; day <= daysInMonth; day += 1) {
-      const cssClass = day === now.getDate() ? "today" : "";
-      html += `<div class="cal-day ${cssClass}">${day}</div>`;
+      const thisDate = new Date(year, month, day);
+      const dateKey = formatDateKey(thisDate);
+      const classes = ["cal-day"];
+      if (formatDateKey(thisDate) === formatDateKey(now)) {
+        classes.push("today");
+      }
+      if (formatDateKey(thisDate) === selectedKey) {
+        classes.push("selected");
+      }
+      const workloadClass = workloadClassForDate(dateKey);
+      const dot = workloadClass
+        ? `<span class="workload-dot ${workloadClass}" title="Workload indicator"></span>`
+        : "";
+      html += `<button type="button" class="${classes.join(" ")}" data-date="${dateKey}"><span class="cal-day-num">${day}</span>${dot}</button>`;
     }
 
     const currentCount = (html.match(/cal-day/g) || []).length;
@@ -666,11 +1078,71 @@ function initDashboardPage() {
     }
 
     els.calDays.innerHTML = html;
-    els.scheduleTitle.textContent = now.toLocaleString("en-IN", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    });
+    renderSelectedDateHeader();
+  }
+
+  function onCalendarClick(event) {
+    const button = event.target.closest("button.cal-day[data-date]");
+    if (!button) {
+      return;
+    }
+
+    const date = toDateFromInput(button.getAttribute("data-date") || "");
+    if (!date) {
+      return;
+    }
+
+    selectedDate = date;
+    buildCalendar();
+    timelineEvents = [];
+    renderTimeline();
+  }
+
+  async function onAddToScheduleClick() {
+    if (!els.scheduleModal || !els.scheduleModalTitle || !els.scheduleModalDate || !els.scheduleModalTime) {
+      return;
+    }
+    els.scheduleModal.classList.remove("hidden");
+    els.scheduleModal.setAttribute("aria-hidden", "false");
+    els.scheduleModalDate.value = formatDateForInput(selectedDate);
+    els.scheduleModalTime.value = "14:00";
+    els.scheduleModalTitle.value = "";
+    els.scheduleModalTitle.focus();
+  }
+
+  function closeScheduleModal() {
+    if (!els.scheduleModal) {
+      return;
+    }
+    els.scheduleModal.classList.add("hidden");
+    els.scheduleModal.setAttribute("aria-hidden", "true");
+  }
+
+  function onScheduleModalOverlayClick(event) {
+    if (!els.scheduleModal) {
+      return;
+    }
+    if (event.target === els.scheduleModal) {
+      closeScheduleModal();
+    }
+  }
+
+  function onScheduleModalSubmit(event) {
+    event.preventDefault();
+    if (!els.scheduleModalTitle || !els.scheduleModalDate || !els.scheduleModalTime || !els.messageInput || !els.chatForm) {
+      return;
+    }
+
+    const title = (els.scheduleModalTitle.value || "").trim();
+    const date = (els.scheduleModalDate.value || "").trim();
+    const time = (els.scheduleModalTime.value || "").trim();
+    if (!title || !date || !time) {
+      return;
+    }
+
+    els.messageInput.value = `Schedule ${title} on ${date} at ${time}`;
+    closeScheduleModal();
+    els.chatForm.requestSubmit();
   }
 
   function renderFreeSlotsFromText(text) {
@@ -740,6 +1212,30 @@ function initDashboardPage() {
     event.preventDefault();
     const message = (els.messageInput?.value || "").trim();
     if (!message) {
+      return;
+    }
+
+    const lowerMessage = message.toLowerCase();
+    const isAffirmative = /^(yes|yep|yeah|sure|ok|okay|please do that|do that|confirm|go ahead|add it)$/i.test(
+      lowerMessage
+    );
+    const isNegative = /^(no|nope|cancel|stop|not now)$/i.test(lowerMessage);
+
+    if (pendingAction && (isAffirmative || isNegative)) {
+      addUserMessage(message);
+      if (els.messageInput) {
+        els.messageInput.value = "";
+      }
+      if (isAffirmative) {
+        await confirmPendingAction();
+      } else {
+        pendingAction = null;
+        if (els.confirmBar) {
+          els.confirmBar.classList.add("hidden");
+        }
+        setAgentStatus();
+        addBotMessage("Okay, I cancelled that action.");
+      }
       return;
     }
 
@@ -855,9 +1351,6 @@ function initDashboardPage() {
         navigateTo("/static/auth.html?mode=login");
       });
     }
-    if (els.connectCalendarBtn) {
-      els.connectCalendarBtn.addEventListener("click", connectCalendar);
-    }
     if (els.taskForm) {
       els.taskForm.addEventListener("submit", createTask);
     }
@@ -877,22 +1370,34 @@ function initDashboardPage() {
       els.confirmActionBtn.addEventListener("click", confirmPendingAction);
     }
     if (els.addEventBtn && els.messageInput && els.chatForm) {
-      els.addEventBtn.addEventListener("click", () => {
-        els.messageInput.value = "Add a 2pm meeting";
-        els.chatForm.requestSubmit();
-      });
+      els.addEventBtn.addEventListener("click", onAddToScheduleClick);
+    }
+    if (els.scheduleModal) {
+      els.scheduleModal.addEventListener("click", onScheduleModalOverlayClick);
+    }
+    if (els.scheduleModalCancelBtn) {
+      els.scheduleModalCancelBtn.addEventListener("click", closeScheduleModal);
+    }
+    if (els.scheduleModalForm) {
+      els.scheduleModalForm.addEventListener("submit", onScheduleModalSubmit);
+    }
+    if (els.calDays) {
+      els.calDays.addEventListener("click", onCalendarClick);
     }
     els.viewTabs.forEach((tab) => tab.addEventListener("click", switchView));
   }
 
   async function boot() {
     buildCalendar();
+    renderSelectedDateHeader();
     renderTimeline();
     wireEvents();
     await checkHealth();
     await hydrateCurrentUser();
     await loadTasks();
-    await refreshAvailability();
+    if (calendarConnected) {
+      await refreshAvailability();
+    }
     addBotMessage("FlowAgent is ready. Ask me to optimize your schedule.");
   }
 
@@ -903,6 +1408,14 @@ function routeApp() {
   enablePageTransitions();
   if (PAGE === "auth") {
     initAuthPage();
+    return;
+  }
+  if (PAGE === "signup-verify") {
+    initSignupVerifyPage();
+    return;
+  }
+  if (PAGE === "forgot-password") {
+    initForgotPasswordPage();
     return;
   }
   if (PAGE === "dashboard") {

@@ -15,7 +15,22 @@ class FlowMessageRequest(BaseModel):
 class SignUpRequest(BaseModel):
     email: str
     password: str
-    first_name: str = ""
+    first_name: str
+
+
+class SignupVerifyOtpRequest(BaseModel):
+    email: str
+    otp: str
+
+
+class ForgotPasswordOtpRequest(BaseModel):
+    email: str
+
+
+class ForgotPasswordResetRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
 
 
 class LoginRequest(BaseModel):
